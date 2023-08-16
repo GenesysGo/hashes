@@ -4,6 +4,8 @@
 # resolver = "2"
 members = [
     "blake2",
+    "digest",
+    "crypto-common",
     "fsb",
     "gost94",
     "groestl",
