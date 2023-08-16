@@ -335,9 +335,3 @@ impl fmt::Display for InvalidLength {
 
 #[cfg(feature = "std")]
 impl std::error::Error for InvalidLength {}
-
-pub trait SerializableHasher: BlockSizeUser {
-    fn to_bytes(&self) -> GenericArray<u8, <Self as BlockSizeUser>::BlockSize>;
-
-    fn from_bytes(bytes: GenericArray<u8, <Self as BlockSizeUser>::BlockSize>) -> Self;
-}

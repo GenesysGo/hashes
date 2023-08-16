@@ -1,6 +1,6 @@
 use super::{
     AlgorithmName, Buffer, BufferKindUser, ExtendableOutputCore, FixedOutputCore, OutputSizeUser,
-    Reset, UpdateCore, XofReaderCoreWrapper,
+    Reset, SerializableHasher, UpdateCore, XofReaderCoreWrapper,
 };
 use crate::{
     ExtendableOutput, ExtendableOutputReset, FixedOutput, FixedOutputReset, HashMarker, Update,
@@ -56,6 +56,22 @@ where
     pub fn decompose(self) -> (T, Buffer<T>) {
         let Self { core, buffer } = self;
         (core, buffer)
+    }
+}
+
+impl<T> CoreWrapper<T>
+where
+    T: BufferKindUser + SerializableHasher,
+{
+    /// Discards the buffer and serializes the inner core type
+    pub fn to_bytes(&self) -> <T as SerializableHasher>::SerializedForm {
+        self.core.to_bytes()
+    }
+
+    /// Deserializes the inner core type and constructs a new buffer
+    pub fn from_bytes(bytes: <T as SerializableHasher>::SerializedForm) -> CoreWrapper<T> {
+        let core = T::from_bytes(bytes);
+        CoreWrapper::from_core(core)
     }
 }
 

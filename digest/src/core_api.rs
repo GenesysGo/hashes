@@ -70,7 +70,9 @@ pub trait XofReaderCore: BlockSizeUser {
 /// [`finalize_variable_core`]: VariableOutputCore::finalize_variable_core
 /// [`new`]: VariableOutputCore::new
 /// [`TRUNC_SIDE`]: VariableOutputCore::TRUNC_SIDE
-pub trait VariableOutputCore: UpdateCore + OutputSizeUser + BufferKindUser + Sized {
+pub trait VariableOutputCore:
+    UpdateCore + OutputSizeUser + BufferKindUser + Sized + SerializableHasher
+{
     /// Side which should be used in a truncated result.
     const TRUNC_SIDE: TruncSide;
 
@@ -101,4 +103,19 @@ pub enum TruncSide {
     Left,
     /// Truncate right side, i.e. `&out[m..]`.
     Right,
+}
+
+/// Trait which allows hasher to be serialized
+pub trait SerializableHasher: BlockSizeUser {
+    /// Bytes. GenericArray or [u8; N].
+    type SerializedForm;
+
+    /// Required for wrapper types
+    type HasherType: VariableOutputCore;
+
+    /// Serializes the hasher into SerializedForm
+    fn to_bytes(&self) -> Self::SerializedForm;
+
+    /// Deserializes the hasher from SerializedForm
+    fn from_bytes(bytes: Self::SerializedForm) -> Self;
 }

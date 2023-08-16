@@ -33,3 +33,15 @@ fn sha512_rand() {
         ")[..]
     );
 }
+
+#[test]
+fn serializable_hasher_integration() {
+    let mut h = Sha256::new();
+    feed_rand_16mib(&mut h);
+    let bytes = h.to_bytes();
+    let sha256 = Sha256::from_bytes(bytes);
+    assert_eq!(
+        sha256.finalize()[..],
+        hex!("45f51fead87328fe837a86f4f1ac0eb15116ab1473adc0423ef86c62eb2320c7")[..]
+    );
+}

@@ -3,8 +3,8 @@ use core::{fmt, slice::from_ref};
 use digest::{
     block_buffer::Eager,
     core_api::{
-        AlgorithmName, Block, BlockSizeUser, Buffer, BufferKindUser, OutputSizeUser, TruncSide,
-        UpdateCore, VariableOutputCore,
+        AlgorithmName, Block, BlockSizeUser, Buffer, BufferKindUser, OutputSizeUser,
+        SerializableHasher, TruncSide, UpdateCore, VariableOutputCore,
     },
     typenum::{Unsigned, U128, U32, U64},
     HashMarker, InvalidOutputSize, Output,
@@ -154,4 +154,124 @@ impl fmt::Debug for Sha512VarCore {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str("Sha512VarCore { ... }")
     }
+}
+
+impl SerializableHasher for Sha256VarCore {
+    type HasherType = Self;
+    type SerializedForm = [u8; 40];
+    /// Serializes a [Sha256VarCore] into the following format
+    ///    
+    /// | ----------------- 40 bytes ----------------- |
+    /// [ ----- 32 bytes of state ----- | u64 le_bytes |
+    fn to_bytes(&self) -> [u8; 40] {
+        // Initialize return value with zeros
+        let mut bytes = [0; 40];
+
+        // Copy state and block length
+        bytes[..32]
+            .copy_from_slice(&unsafe { core::mem::transmute::<[u32; 8], [u8; 32]>(self.state) });
+        bytes[32..40].copy_from_slice(&self.block_len.to_le_bytes());
+
+        bytes
+    }
+
+    /// Given 40 bytes serialized as
+    ///    
+    /// | ----------------- 40 bytes ----------------- |
+    /// [ ----- 32 bytes of state ----- | u64 le_bytes |
+    ///
+    /// constructs a [Sha256VarCore].
+    fn from_bytes(bytes: [u8; 40]) -> Sha256VarCore {
+        // Initialize and copy state
+        let mut state = [0; 32];
+        state.copy_from_slice(&bytes[..32]);
+        let state = unsafe { core::mem::transmute::<[u8; 32], [u32; 8]>(state) };
+
+        // Convert le len bytes
+        use core::convert::TryInto;
+        let block_len = u64::from_le_bytes(bytes[32..].try_into().unwrap());
+
+        Sha256VarCore { state, block_len }
+    }
+}
+
+impl SerializableHasher for Sha512VarCore {
+    type HasherType = Self;
+    type SerializedForm = [u8; 80];
+
+    /// Serializes a [Sha512VarCore] into the following format
+    ///    
+    /// | ----------------- 80 bytes ----------------- |
+    /// [ ----- 64 bytes of state ----- | u128 lebytes |
+    fn to_bytes(&self) -> [u8; 80] {
+        // Initialize return value with zeros
+        let mut bytes = [0; 80];
+
+        // Copy state and block length
+        bytes[..64]
+            .copy_from_slice(&unsafe { core::mem::transmute::<[u64; 8], [u8; 64]>(self.state) });
+        bytes[64..].copy_from_slice(&self.block_len.to_le_bytes());
+
+        bytes
+    }
+
+    /// Given 80 bytes serialized as
+    ///    
+    /// | ----------------- 80 bytes ----------------- |
+    /// [ ----- 64 bytes of state ----- | u128 lebytes |
+    ///
+    /// constructs a [Sha512VarCore].
+    fn from_bytes(bytes: [u8; 80]) -> Sha512VarCore {
+        // Initialize and copy state
+        let mut state = [0; 64];
+        state.copy_from_slice(&bytes[..64]);
+        let state = unsafe { core::mem::transmute::<[u8; 64], [u64; 8]>(state) };
+
+        // Convert le len bytes
+        use core::convert::TryInto;
+        let block_len = u128::from_le_bytes(bytes[64..].try_into().unwrap());
+
+        Sha512VarCore { state, block_len }
+    }
+}
+
+#[test]
+fn test_sha256_serialize_deserialize() {
+    use digest::generic_array::GenericArray;
+    let mut sha256 = Sha256VarCore::new(32).unwrap();
+    let block: Block<Sha256VarCore> = GenericArray::clone_from_slice(
+        b"caveycoolwasherecaveycoolwasherecaveycoolwasherecaveycoolwashere",
+    );
+    sha256.update_blocks(&[block]);
+
+    let mut round_trip = Sha256VarCore::from_bytes(sha256.to_bytes());
+    assert_eq!(sha256.state, round_trip.state);
+    assert_eq!(sha256.block_len, round_trip.block_len);
+
+    let mut hash_bytes = [0; 32];
+    let hash = GenericArray::from_mut_slice(&mut hash_bytes);
+    let mut buffer: Buffer<Sha256VarCore> = Buffer::<Sha256VarCore>::default();
+    sha256.finalize_variable_core(&mut buffer, hash);
+
+    let mut round_trip_hash_bytes = [0; 32];
+    let round_trip_hash = GenericArray::from_mut_slice(&mut round_trip_hash_bytes);
+    let mut buffer: Buffer<Sha256VarCore> = Buffer::<Sha256VarCore>::default();
+    round_trip.finalize_variable_core(&mut buffer, round_trip_hash);
+
+    assert_eq!(hash_bytes, round_trip_hash_bytes)
+}
+
+#[test]
+fn test_sha512_serialize_deserialize() {
+    use digest::generic_array::GenericArray;
+    let mut sha512 = Sha512VarCore::new(32).unwrap();
+    let block: Block<Sha512VarCore> = GenericArray::clone_from_slice(
+        b"caveycoolwasherecaveycoolwasherecaveycoolwasherecaveycoolwasherecaveycoolwasherecaveycoolwasherecaveycoolwasherecaveycoolwashere",
+    );
+    sha512.update_blocks(&[block]);
+
+    let round_trip = Sha512VarCore::from_bytes(sha512.to_bytes());
+
+    assert_eq!(sha512.state, round_trip.state);
+    assert_eq!(sha512.block_len, round_trip.block_len);
 }

@@ -1,6 +1,6 @@
 use super::{
-    AlgorithmName, Buffer, BufferKindUser, FixedOutputCore, Reset, TruncSide, UpdateCore,
-    VariableOutputCore,
+    AlgorithmName, Buffer, BufferKindUser, FixedOutputCore, Reset, SerializableHasher, TruncSide,
+    UpdateCore, VariableOutputCore,
 };
 use crate::HashMarker;
 #[cfg(feature = "mac")]
@@ -30,6 +30,57 @@ where
 {
     inner: T,
     _out: PhantomData<(OutSize, O)>,
+}
+
+impl<T, OutSize, O> CtVariableCoreWrapper<T, OutSize, O>
+where
+    T: VariableOutputCore,
+    OutSize: ArrayLength<u8> + IsLessOrEqual<T::OutputSize>,
+    LeEq<OutSize, T::OutputSize>: NonZero,
+{
+    /// Serializes the inner type into its serialized form
+    pub fn to_bytes(&self) -> <T as SerializableHasher>::SerializedForm {
+        self.inner.to_bytes()
+    }
+
+    /// Deserializes the inner type from its serialized form
+    pub fn from_bytes(bytes: <T as SerializableHasher>::SerializedForm) -> Self {
+        CtVariableCoreWrapper {
+            inner: T::from_bytes(bytes),
+            _out: PhantomData::default(),
+        }
+    }
+}
+
+impl<T, OutSize, O> SerializableHasher for CtVariableCoreWrapper<T, OutSize, O>
+where
+    T: VariableOutputCore,
+    OutSize: ArrayLength<u8> + IsLessOrEqual<T::OutputSize>,
+    LeEq<OutSize, T::OutputSize>: NonZero,
+{
+    type HasherType = T;
+    type SerializedForm = <T as SerializableHasher>::SerializedForm;
+    /// Serializes a [Sha256VarCore] into the following format
+    ///    
+    /// | ----------------- 40 bytes ----------------- |
+    /// [ ----- 32 bytes of state ----- | u64 le_bytes |
+    fn to_bytes(&self) -> <T as SerializableHasher>::SerializedForm {
+        self.inner.to_bytes()
+    }
+
+    /// Given 40 bytes serialized as
+    ///    
+    /// | ----------------- 40 bytes ----------------- |
+    /// [ ----- 32 bytes of state ----- | u64 le_bytes |
+    ///
+    /// constructs a [Sha256VarCore].
+    fn from_bytes(bytes: <T as SerializableHasher>::SerializedForm) -> Self {
+        let inner = <T as SerializableHasher>::from_bytes(bytes);
+        CtVariableCoreWrapper {
+            inner,
+            _out: PhantomData::default(),
+        }
+    }
 }
 
 impl<T, OutSize, O> HashMarker for CtVariableCoreWrapper<T, OutSize, O>
